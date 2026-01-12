@@ -8,164 +8,195 @@ if not script_key or not keys[script_key] then
     game.Players.LocalPlayer:Kick("no")
 end
 
-local plrs = game:GetService("Players")
-local rs = game:GetService("RunService")
-local ws = game:GetService("Workspace")
+if fps then
+    local n = tonumber(fps)
+    if n and n > 0 then
+        if setfpscap then setfpscap(n) end
+    end
+end
 
-local lp = plrs.LocalPlayer
-local cam = ws.CurrentCamera
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Chat = game:GetService("Chat")
 
-local homer = nil
-local swarmloop = nil
-local camloop = nil
-local running = false
+local player = Players.LocalPlayer
+local camera = Workspace.CurrentCamera
+
+local currentHomer = nil
+local swarmConnection = nil
+local cameraConnection = nil
+local isActive = false
 
 local angle = 0
-local spd = 0
-local lastt = tick()
+local speed = 0
+local lastTime = tick()
 
-local function gethomer()
-    for _, v in ipairs(plrs:GetPlayers()) do
-        if v ~= lp and v.Team and v.Team.Name and string.lower(v.Team.Name):find("homer")
-        and v.Character and v.Character:FindFirstChild("HumanoidRootPart") 
-        and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 then
-            return v
+local function say(msg)
+    if Chat and player.Character and player.Character:FindFirstChild("Head") then
+        pcall(function()
+            Chat:Chat(player.Character.Head, msg, Enum.ChatColor.Blue)
+        end)
+    end
+end
+
+local function findHomer()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player 
+           and p.Team 
+           and p.Team.Name 
+           and string.lower(p.Team.Name):find("homer")
+           and p.Character 
+           and p.Character:FindFirstChild("HumanoidRootPart")
+           and p.Character:FindFirstChild("Humanoid")
+           and p.Character.Humanoid.Health > 0 then
+            return p
         end
     end
     return nil
 end
 
-local function stopshit()
-    if swarmloop then swarmloop:Disconnect() swarmloop = nil end
-    if camloop then camloop:Disconnect() camloop = nil end
+local function stopSwarm()
+    if swarmConnection then swarmConnection:Disconnect() swarmConnection = nil end
+    if cameraConnection then cameraConnection:Disconnect() cameraConnection = nil end
     
-    local char = lp.Character
+    local char = player.Character
     if char and char:FindFirstChild("Humanoid") then
         char.Humanoid.PlatformStand = false
-        char.Humanoid:ChangeState(8)
+        char.Humanoid:ChangeState(Enum.HumanoidStateType.Running)
     end
     
     pcall(function()
-        cam.CameraType = Enum.CameraType.Custom
-        cam.CameraSubject = char and char:FindFirstChild("Humanoid")
+        camera.CameraType = Enum.CameraType.Custom
+        camera.CameraSubject = char and char:FindFirstChild("Humanoid")
     end)
     
-    running = false
-    homer = nil
+    if isActive then
+        say("Stopped swarming")
+    end
+    
+    isActive = false
+    currentHomer = nil
 end
 
-local function sticktothefloorlol()
-    local char = lp.Character
+local function forcePlatformStand()
+    local char = player.Character
     if char and char:FindFirstChild("Humanoid") then
         char.Humanoid.PlatformStand = true
         char.Humanoid:ChangeState(Enum.HumanoidStateType.PlatformStanding)
     end
 end
 
-local function dostuff(target)
-    if running then return end
+local function startSwarm(homerPlayer)
+    if isActive then return end
     
-    local me = lp.Character
-    if not me or not me:FindFirstChild("HumanoidRootPart") then return end
+    local myChar = player.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return end
     
-    homer = target
-    running = true
+    currentHomer = homerPlayer
+    isActive = true
     
-    cam.CameraType = Enum.CameraType.Scriptable
+    camera.CameraType = Enum.CameraType.Scriptable
+    forcePlatformStand()
     
-    sticktothefloorlol()
+    say("Swarming " .. homerPlayer.Name .. "!")
     
     task.spawn(function()
-        while running and lp.Character == me do
-            sticktothefloorlol()
-            task.wait(0.13)
+        local oldChar = myChar
+        while isActive and player.Character == oldChar do
+            forcePlatformStand()
+            task.wait(0.12)
         end
     end)
     
-    angle = math.random()*6.28*2
-    spd = (math.random()<0.5 and 1 or -1) * (20 + math.random()*20)
-    lastt = tick()
+    angle = math.random() * math.pi * 2
+    speed = (math.random() < 0.5 and 1 or -1) * (20 + math.random() * 20)
+    lastTime = tick()
     
-    swarmloop = rs.Heartbeat:Connect(function()
-        if not running then return end
+    swarmConnection = RunService.Heartbeat:Connect(function()
+        if not isActive then return end
         
-        local hchar = homer and homer.Character
-        if not hchar or not hchar.Parent or not hchar:FindFirstChild("HumanoidRootPart") then
-            stopshit() return
+        local homerChar = currentHomer and currentHomer.Character
+        if not homerChar or not homerChar.Parent or not homerChar:FindFirstChild("HumanoidRootPart") then
+            stopSwarm()
+            return
         end
         
-        local mechar = lp.Character
-        if not mechar or not mechar:FindFirstChild("HumanoidRootPart") then
-            stopshit() return
+        local myCharNow = player.Character
+        if not myCharNow or not myCharNow:FindFirstChild("HumanoidRootPart") then
+            stopSwarm()
+            return
         end
         
         local now = tick()
-        local dt = now - lastt
-        lastt = now
+        local delta = now - lastTime
+        lastTime = now
         
-        angle = angle + spd * dt * 1.75
+        angle = angle + speed * delta * 1.75
         
-        if math.random() < dt*12 then
-            spd = (math.random()<0.5 and 1 or -1)*(20 + math.random()*22)
+        if math.random() < delta * 12 then
+            speed = (math.random() < 0.5 and 1 or -1) * (20 + math.random() * 22)
         end
         
-        if math.random() < dt*1.4 then
-            angle = angle + (math.random()-0.5)*math.pi*4
+        if math.random() < delta * 1.4 then
+            angle = angle + (math.random() - 0.5) * math.pi * 4
         end
         
-        local root = hchar.HumanoidRootPart
-        local myroot = mechar.HumanoidRootPart
+        local hrp = homerChar.HumanoidRootPart
+        local myHrp = myCharNow.HumanoidRootPart
         
-        local rad = 8 + math.sin(angle*4)*2.2
+        local radius = 8 + math.sin(angle * 4) * 2.2
+        local pitch = (math.sin(angle * 2.3) * 0.65 + math.sin(angle * 0.8) * 0.35) * (math.pi / 2)
         
-        local pitch = (math.sin(angle*2.3)*0.65 + math.sin(angle*0.8)*0.35) * 1.57
+        local horiz = radius * math.cos(pitch)
+        local x = horiz * math.cos(angle)
+        local y = radius * math.sin(pitch)
+        local z = horiz * math.sin(angle)
         
-        local rh = rad * math.cos(pitch)
-        local x = rh * math.cos(angle)
-        local y = rad * math.sin(pitch)
-        local z = rh * math.sin(angle)
+        local targetPos = hrp.Position + Vector3.new(x, y, z)
         
-        local pos = root.Position + Vector3.new(x,y,z)
+        myHrp.CFrame = CFrame.lookAt(myHrp.Position, hrp.Position)
+        myHrp.CFrame = CFrame.new(targetPos) * (myHrp.CFrame - myHrp.Position)
         
-        myroot.CFrame = CFrame.lookAt(pos, root.Position)
-        myroot.Velocity = Vector3.zero
-        myroot.AngularVelocity = Vector3.zero
+        myHrp.Velocity = Vector3.zero
     end)
     
-    camloop = rs.RenderStepped:Connect(function()
-        if not running then return end
+    cameraConnection = RunService.RenderStepped:Connect(function()
+        if not isActive then return end
         
-        local hchar = homer and homer.Character
-        if not hchar or not hchar:FindFirstChild("HumanoidRootPart") then return end
+        local homerChar = currentHomer and currentHomer.Character
+        if not homerChar or not homerChar:FindFirstChild("HumanoidRootPart") then return end
         
-        local root = hchar.HumanoidRootPart
-        local off = root.CFrame.LookVector * -14 + Vector3.new(0,5.5,0)
-        local cpos = root.Position + off
+        local hrp = homerChar.HumanoidRootPart
+        local offset = hrp.CFrame.LookVector * -14 + Vector3.new(0, 5.5, 0)
+        local camPos = hrp.Position + offset
         
-        cam.CFrame = CFrame.lookAt(cpos, root.Position + Vector3.new(0,3,0))
+        camera.CFrame = CFrame.lookAt(camPos, hrp.Position + Vector3.new(0, 3, 0))
     end)
 end
 
 task.spawn(function()
     while true do
-        if not running then
-            local char = lp.Character
+        if not isActive then
+            local char = player.Character
             if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
-                local target = gethomer()
+                local target = findHomer()
                 if target then
-                    task.wait(0.35 + math.random()*0.3)
-                    if not running and gethomer() == target then
-                        dostuff(target)
+                    task.wait(0.35 + math.random() * 0.3)
+                    if not isActive and findHomer() == target then
+                        startSwarm(target)
                     end
+                elseif math.random() < 0.02 then
+                    say("Waiting for Homer...")
                 end
             end
         end
-        task.wait(0.1)
+        task.wait(0.15)
     end
 end)
 
-lp.CharacterAdded:Connect(function()
-    stopshit()
+player.CharacterAdded:Connect(function()
+    stopSwarm()
 end)
 
-stopshit()
+stopSwarm()
