@@ -25,7 +25,7 @@ local spd = 0
 local lastt = tick()
 
 local function gethomer()
-    for _, v in plrs:GetPlayers() do
+    for _, v in ipairs(plrs:GetPlayers()) do
         if v ~= lp and v.Team and v.Team.Name and string.lower(v.Team.Name):find("homer")
         and v.Character and v.Character:FindFirstChild("HumanoidRootPart") 
         and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health > 0 then
@@ -146,18 +146,21 @@ local function dostuff(target)
     end)
 end
 
-rs.Heartbeat:Connect(function()
-    if running then return end
-    
-    local char = lp.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then
-        return
-    end
-    
-    local target = gethomer()
-    if target then
-        task.wait(0.35 + math.random()*0.3)
-        dostuff(target)
+task.spawn(function()
+    while true do
+        if not running then
+            local char = lp.Character
+            if char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") then
+                local target = gethomer()
+                if target then
+                    task.wait(0.35 + math.random()*0.3)
+                    if not running and gethomer() == target then
+                        dostuff(target)
+                    end
+                end
+            end
+        end
+        task.wait(0.1)
     end
 end)
 
